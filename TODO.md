@@ -1,0 +1,3 @@
+- Extend hardware detection beyond CPU/GPU (e.g., NPU/FPGA/TPU).
+- Update README to document workflow and sample commands.
+- Design a CLI-level user experience (commands, flags, output).
