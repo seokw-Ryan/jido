@@ -1,4 +1,4 @@
-# JIDO
+# jido
 
 JIDO is an early-stage ML systems toolkit focused on **hardware detection**, **backend discovery**, and **benchmark planning** for model inference. The repository is intentionally lightweight right now while the core APIs stabilize.
 
