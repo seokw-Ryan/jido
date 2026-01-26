@@ -42,7 +42,9 @@ class BenchmarkStats:
     iterations: int
     mean_ms: float
     median_ms: float
+    p50_ms: float
     p95_ms: float
+    p99_ms: float
     min_ms: float
     max_ms: float
     std_ms: float
@@ -62,6 +64,32 @@ class BenchmarkResult:
     env: Optional[Dict[str, Any]] = None
     machine_id: Optional[str] = None
     scan_hints: Optional[List[str]] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "operation": self.operation,
+            "kernel": self.kernel_name,
+            "backend": self.backend,
+            "kernel_type": self.kernel_type,
+            "timings_ms": self.timings_ms,
+            "stats": {
+                "iterations": self.stats.iterations,
+                "mean_ms": self.stats.mean_ms,
+                "median_ms": self.stats.median_ms,
+                "p50_ms": self.stats.p50_ms,
+                "p95_ms": self.stats.p95_ms,
+                "p99_ms": self.stats.p99_ms,
+                "min_ms": self.stats.min_ms,
+                "max_ms": self.stats.max_ms,
+                "std_ms": self.stats.std_ms,
+            },
+            "memory_bytes": self.memory_bytes,
+            "utilization": self.utilization,
+            "hardware": self.hardware,
+            "env": self.env,
+            "machine_id": self.machine_id,
+            "scan_hints": self.scan_hints,
+        }
 
 
 class _Timer:
@@ -224,17 +252,23 @@ def _compute_stats(timings: List[float]) -> BenchmarkStats:
             iterations=0,
             mean_ms=0.0,
             median_ms=0.0,
+            p50_ms=0.0,
             p95_ms=0.0,
+            p99_ms=0.0,
             min_ms=0.0,
             max_ms=0.0,
             std_ms=0.0,
         )
+    p50_index = max(int(count * 0.50) - 1, 0)
     p95_index = max(int(count * 0.95) - 1, 0)
+    p99_index = max(int(count * 0.99) - 1, 0)
     return BenchmarkStats(
         iterations=count,
         mean_ms=float(statistics.mean(timings_sorted)),
         median_ms=float(statistics.median(timings_sorted)),
+        p50_ms=float(timings_sorted[p50_index]),
         p95_ms=float(timings_sorted[p95_index]),
+        p99_ms=float(timings_sorted[p99_index]),
         min_ms=float(min(timings_sorted)),
         max_ms=float(max(timings_sorted)),
         std_ms=float(statistics.pstdev(timings_sorted)) if count > 1 else 0.0,
