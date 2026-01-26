@@ -8,7 +8,6 @@ import sys
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from jido.core.datastore.store import write_run_outputs
 from jido.core.env.discovery import discover_env
 from jido.core.hardware import amd, intel, nvidia
 
@@ -144,7 +143,6 @@ def compute_machine_id(
 
 
 def scan(
-    out_dir: str = "runs",
     deep: bool = False,
     install_hints: bool = False,
 ) -> Tuple[Dict[str, Any], Dict[str, Any], List[str], str]:
@@ -209,6 +207,4 @@ def scan(
                 "Intel GPU detected but sycl-ls not found. Install Intel oneAPI/Level Zero tools."
             )
 
-    run_dir = write_run_outputs(out_dir=out_dir, machine_id=machine_id, hardware=hardware, env=env)
-
-    return hardware, env, hints, str(run_dir)
+    return hardware, env, hints, machine_id
