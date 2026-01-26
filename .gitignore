@@ -6,3 +6,11 @@ build/
 .venv/
 .env
 *.sqlite
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+.ipynb_checkpoints/
