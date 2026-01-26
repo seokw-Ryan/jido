@@ -25,6 +25,14 @@ def discover_env() -> Dict[str, Any]:
         version = _module_version(module)
         frameworks[module] = {"available": version is not None, "version": version}
 
+    compilers = {
+        "gcc": _tool_info("gcc"),
+        "clang": _tool_info("clang"),
+        "nvcc": _tool_info("nvcc"),
+        "hipcc": _tool_info("hipcc"),
+        "icx": _tool_info("icx"),
+    }
+
     vendor_tools = {
         "nvidia_smi": _tool_info("nvidia-smi"),
         "rocm_smi": _tool_info("rocm-smi"),
@@ -34,5 +42,6 @@ def discover_env() -> Dict[str, Any]:
 
     return {
         "frameworks": frameworks,
+        "compilers": compilers,
         "vendor_tools": vendor_tools,
     }
