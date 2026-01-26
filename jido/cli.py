@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import importlib.metadata
 import json
+import subprocess
 import sys
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -23,6 +25,178 @@ def _safe_import_rich():
         return Console, Panel, Table, Progress, BarColumn, TextColumn, TimeElapsedColumn
     except Exception:
         return None, None, None, None, None, None, None
+
+
+_EXTRA_DEFINITIONS: Dict[str, Dict[str, Any]] = {
+    "torch": {
+        "packages": ["torch", "transformers"],
+        "description": "PyTorch + Transformers (needed for benchmarks)",
+    },
+    "onnx": {
+        "packages": ["onnxruntime"],
+        "description": "ONNX Runtime",
+    },
+    "vllm": {
+        "packages": ["vllm"],
+        "description": "vLLM backend",
+    },
+    "tensorrt": {
+        "packages": ["tensorrt"],
+        "description": "TensorRT backend (NVIDIA only)",
+    },
+    "llama-cpp": {
+        "packages": ["llama-cpp-python"],
+        "description": "llama.cpp backend (C++ build required)",
+    },
+    "openvino": {
+        "packages": ["openvino"],
+        "description": "OpenVINO backend",
+    },
+    "deepspeed": {
+        "packages": ["deepspeed"],
+        "description": "DeepSpeed backend",
+    },
+}
+
+
+def _package_available(package: str) -> bool:
+    try:
+        return importlib.metadata.version(package) is not None
+    except importlib.metadata.PackageNotFoundError:
+        return False
+    except Exception:
+        return False
+
+
+def _parse_extras_arg(value: Optional[str]) -> List[str]:
+    if not value:
+        return []
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _extra_status() -> Dict[str, Dict[str, Any]]:
+    status: Dict[str, Dict[str, Any]] = {}
+    for name, entry in _EXTRA_DEFINITIONS.items():
+        packages = entry["packages"]
+        missing = [pkg for pkg in packages if not _package_available(pkg)]
+        status[name] = {
+            "packages": packages,
+            "missing": missing,
+            "description": entry.get("description", ""),
+        }
+    return status
+
+
+def _render_deps_output(
+    status: Dict[str, Dict[str, Any]],
+    selected: List[str],
+    missing_selected: List[str],
+    editable: bool,
+) -> None:
+    Console, Panel, Table, _, _, _, _ = _safe_import_rich()
+    install_cmd = _build_install_command(selected, editable)
+
+    if Console is None:
+        print("JIDO Dependencies")
+        for name, entry in status.items():
+            missing = entry["missing"]
+            missing_note = f"missing: {', '.join(missing)}" if missing else "installed"
+            print(f"- {name}: {missing_note}")
+        if selected:
+            print("Suggested install command:")
+            print(install_cmd)
+        return
+
+    console = Console()
+    console.print(Panel.fit("[bold]JIDO Dependencies[/bold]", border_style="cyan"))
+
+    table = Table(title="Optional Dependency Groups")
+    table.add_column("Extra")
+    table.add_column("Packages")
+    table.add_column("Status")
+    table.add_column("Notes")
+    for name, entry in status.items():
+        packages = ", ".join(entry["packages"])
+        missing = entry["missing"]
+        status_label = "missing" if missing else "installed"
+        notes = entry.get("description", "")
+        table.add_row(name, packages, status_label, notes)
+    console.print(table)
+
+    if selected:
+        hint = (
+            f"Missing packages in selection: {', '.join(missing_selected)}"
+            if missing_selected
+            else "All selected extras appear installed."
+        )
+        console.print(Panel.fit(hint, title="Status", border_style="yellow"))
+        console.print(
+            Panel.fit(install_cmd, title="Install Command", border_style="green")
+        )
+
+
+def _build_install_command(selected: List[str], editable: bool) -> str:
+    extras = ",".join(selected)
+    target = f".[{extras}]" if extras else "."
+    if editable:
+        return f"{sys.executable} -m pip install -e {target}"
+    return f"{sys.executable} -m pip install {target}"
+
+
+def _build_install_command_args(selected: List[str], editable: bool) -> List[str]:
+    extras = ",".join(selected)
+    target = f".[{extras}]" if extras else "."
+    cmd = [sys.executable, "-m", "pip", "install"]
+    if editable:
+        cmd.append("-e")
+    cmd.append(target)
+    return cmd
+
+
+def _handle_deps(args: argparse.Namespace) -> int:
+    status = _extra_status()
+
+    if args.list:
+        for name in sorted(_EXTRA_DEFINITIONS):
+            entry = _EXTRA_DEFINITIONS[name]
+            packages = ", ".join(entry["packages"])
+            description = entry.get("description", "")
+            suffix = f" ({description})" if description else ""
+            print(f"{name}: {packages}{suffix}")
+        return 0
+
+    if args.all:
+        selected = list(_EXTRA_DEFINITIONS.keys())
+    else:
+        selected = _parse_extras_arg(args.extras)
+        if not selected:
+            selected = [
+                name for name, entry in status.items() if entry["missing"]
+            ]
+
+    unknown = [name for name in selected if name not in _EXTRA_DEFINITIONS]
+    if unknown:
+        raise ValueError(f"Unknown extras: {', '.join(unknown)}")
+
+    missing_selected: List[str] = []
+    for name in selected:
+        missing_selected.extend(status[name]["missing"])
+
+    _render_deps_output(
+        status=status,
+        selected=selected,
+        missing_selected=missing_selected,
+        editable=not args.no_editable,
+    )
+
+    if args.install:
+        if not selected:
+            print("No missing extras detected.")
+            return 0
+        cmd = _build_install_command_args(selected, not args.no_editable)
+        subprocess.run(cmd, check=True)
+
+    return 0
 
 
 def _render_scan_output(
@@ -239,7 +413,7 @@ def _dtype_label(dtype: Any) -> str:
             return "fp32"
     except Exception:
         pass
-    return str(dtype)git push --set-upstream origin feature/git-benchmark
+    return str(dtype)
 
 
 def _format_size(size: Dict[str, int]) -> str:
@@ -532,6 +706,36 @@ def build_parser() -> argparse.ArgumentParser:
         help="Print install hints prominently",
     )
     scan_parser.set_defaults(func=_handle_scan)
+
+    deps_parser = subparsers.add_parser(
+        "deps", help="Show or install optional dependencies", add_help=False,
+    )
+    deps_parser.add_argument("--help", action="help", help="Show this help message and exit")
+    deps_parser.add_argument(
+        "--list",
+        action="store_true",
+        help="List supported extras and packages",
+    )
+    deps_parser.add_argument(
+        "--extras",
+        help="Comma-separated extras to target (e.g. torch,onnx)",
+    )
+    deps_parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Target all optional extras",
+    )
+    deps_parser.add_argument(
+        "--install",
+        action="store_true",
+        help="Run pip install for the selected extras",
+    )
+    deps_parser.add_argument(
+        "--no-editable",
+        action="store_true",
+        help="Install without -e (non-editable)",
+    )
+    deps_parser.set_defaults(func=_handle_deps)
 
     benchmark_parser = subparsers.add_parser(
         "benchmark", help="Run kernel benchmarks", add_help=False,
