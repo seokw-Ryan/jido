@@ -93,10 +93,12 @@ def _runtime_flags_for_gpu(vendor: str, env: Dict[str, Any]) -> Dict[str, bool]:
         vendor_tools.get("nvidia_smi", {}).get("available") is True
         or frameworks.get("torch", {}).get("available") is True
     )
+
     rocm = vendor == "amd" and (
         vendor_tools.get("rocm_smi", {}).get("available") is True
         or vendor_tools.get("amd_smi", {}).get("available") is True
     )
+
     directml = (
         frameworks.get("directml", {}).get("available") is True
         or frameworks.get("torch_directml", {}).get("available") is True
