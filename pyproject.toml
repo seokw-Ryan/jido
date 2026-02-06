@@ -1,0 +1,76 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jido"
+version = "0.1.0"
+description = "Plugin-based ML-systems benchmark and autotune platform"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+authors = [
+    { name = "seokw-Ryan" },
+]
+keywords = ["ml", "benchmark", "gpu", "hardware", "inference", "autotune"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: System :: Benchmark",
+    "Topic :: System :: Hardware",
+]
+dependencies = [
+    "psutil>=5.9",
+    "py-cpuinfo>=9.0",
+    "rich>=13.0",
+]
+
+[project.optional-dependencies]
+torch = [
+    "torch>=2.0",
+    "transformers>=4.30",
+]
+onnx = [
+    "onnxruntime>=1.15",
+]
+vllm = [
+    "vllm>=0.4",
+]
+tensorrt = [
+    "tensorrt>=8.6",
+]
+llama-cpp = [
+    "llama-cpp-python>=0.2",
+]
+openvino = [
+    "openvino>=2023.1",
+]
+deepspeed = [
+    "deepspeed>=0.10",
+]
+full = [
+    "jido[torch,onnx,vllm,tensorrt,llama-cpp,openvino,deepspeed]",
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+]
+
+[project.scripts]
+jido = "jido.cli:main"
+
+[project.urls]
+Repository = "https://github.com/seokw-Ryan/jido"
+
+[tool.setuptools.packages.find]
+include = ["jido*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
