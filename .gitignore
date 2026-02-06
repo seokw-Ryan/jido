@@ -4,6 +4,7 @@ __pycache__/
 dist/
 build/
 .venv/
+runs/
 .env
 *.sqlite
 .pytest_cache/
