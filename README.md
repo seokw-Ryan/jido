@@ -1,12 +1,6 @@
 # jido
 
-jido (지도) is an early-stage ML systems toolkit focused on **hardware detection**, **backend discovery**, and **benchmark planning** for model inference. The repository is intentionally lightweight right now while the core APIs stabilize.
-
-## Status
-
-- Pre-alpha: structure and interfaces are being shaped.
-- Not yet packaged or published.
-- Many modules are placeholders; expect breaking changes.
+jido (지도) is an ML systems toolkit for hardware/runtime discovery and kernel benchmarking.
 
 ## Installation
 
@@ -14,126 +8,128 @@ jido (지도) is an early-stage ML systems toolkit focused on **hardware detecti
 pip install -e .
 ```
 
-### Dependencies
+## Workflow
 
-- `psutil` — CPU and memory detection
-- `py-cpuinfo` — CPU flags and detailed info
-- `rich` — formatted console output (optional, falls back to plain text)
+1. Scan machine capabilities.
+2. Run benchmarks.
+3. Compare new runs to baselines.
+4. Generate reports and recommendations.
+5. Export results for external analysis.
 
-## Usage
+## Commands
 
 ### `jido scan`
-
-Scans the host machine for hardware specs and installed ML software, then outputs a formatted report to the console and saves results as JSON.
+Detect CPU, memory, GPUs, and accelerator-class devices (NPU/TPU/FPGA), plus framework/tool availability.
 
 ```bash
 jido scan
+jido scan --deep --install-hints
+jido scan --json-only --out runs
 ```
 
-#### Flags
-
-| Flag | Description |
-|------|-------------|
-| `-h, --hardware` | Scan hardware only (CPU, memory, GPUs) |
-| `-s, --software` | Scan software only (frameworks, runtimes, vendor tools) |
-| `--out DIR` | Output directory for JSON results (default: `runs`) |
-| `--json-only` | Skip console output, only save JSON files |
-| `--deep` | Attempt deeper vendor tool detection using fallback methods |
-| `--install-hints` | Print installation hints when dependencies are missing |
-
-If neither `-h` nor `-s` is specified, both hardware and software are scanned.
-
-#### Examples
+### `jido benchmark`
+Run operation benchmarks (`matmul`, `attention`, `conv2d`) with configurable size, dtype, kernels, and device.
 
 ```bash
-# Full scan (hardware + software)
-jido scan
-
-# Hardware only
-jido scan -h
-
-# Software only
-jido scan -s
-
-# Full scan with installation hints
-jido scan --install-hints
-
-# Deep vendor tool detection
-jido scan --deep
-
-# JSON output only, custom directory
-jido scan --json-only --out ./my_runs
+jido benchmark list
+jido benchmark matmul --hardware cpu --dtype fp32
+jido benchmark matmul --hardware cuda:0 --kernels reference,torch_matmul,torch_einsum
+jido benchmark --output runs/bench_a.json
 ```
 
-#### Hardware Detection
+Built-in `matmul` kernels include:
+- `reference`
+- `torch_matmul`
+- `torch_einsum`
+- `torch_mm_or_bmm`
+- `torch_compiled`
 
-- **CPU** — brand, physical/logical core counts, CPU feature flags
-- **Memory** — total system RAM (GB)
-- **GPUs** — multi-vendor detection:
-  - **NVIDIA** — via NVML (`pynvml`) or `nvidia-smi` fallback. Reports name, VRAM, driver version.
-  - **AMD** — via `rocm-smi` or `amd-smi` (with `--deep`). Reports card series, VRAM.
-  - **Intel** — via `sycl-ls` (Intel oneAPI). Reports device name.
-- **Runtime flags per GPU** — CUDA, ROCm, DirectML, OpenVINO availability
-- **Machine ID** — deterministic SHA256 fingerprint from CPU, memory, architecture, and GPU names
+### `jido compare`
+Compare candidate benchmark JSON against baseline.
 
-#### Software Detection
-
-- **ML Frameworks** — checks installed versions of `torch`, `onnxruntime`, `transformers`, `openvino`, `directml`, `torch_directml`
-- **Vendor Tools** — checks PATH for `nvidia-smi`, `rocm-smi`, `amd-smi`, `sycl-ls`
-- **Install Hints** — suggests missing tools when a GPU is detected but its vendor utilities are absent
-
-#### Output
-
-Results are always saved to `{OUT_DIR}/{MACHINE_ID}/` as:
-- `hardware.json` — OS, Python, CPU, memory, GPUs, runtime flags, machine ID
-- `env.json` — detected frameworks and vendor tools
-
-Console output uses `rich` tables when available, with plain text fallback.
-
-## Goals
-
-- Detect host hardware and runtime capabilities.
-- Discover available ML backends at runtime.
-- Standardize benchmark plans and results.
-- Generate recommendations and exportable configs.
-
-## What's In The Repo
-
-- `jido/core/hardware/` — hardware discovery (CPU, GPU, memory detection).
-- `jido/core/env/` — environment and framework discovery.
-- `jido/core/datastore/` — JSON result persistence.
-- `jido/cli.py` — CLI entry point and argument parsing.
-- `jido/backends/` — backend plugin stubs.
-- `jido/sweeps/` — sweep/plan expansion stubs.
-- `jido/reports/` — reporting/export stubs.
-- `artifacts/` — deployment templates and example configs.
-
-## Repository Layout (Short)
-
-```
-jido/
-  jido/            # python package source
-  artifacts/       # templates + example configs
-  scripts/         # dev scripts (placeholders)
-  tests/           # unit tests (to be filled)
+```bash
+jido compare --baseline runs/base.json --candidate runs/new.json
+jido compare --baseline runs/base.json --candidate runs/new.json --only-regressions
 ```
 
-## Roadmap
+### `jido recommend`
+Recommend top kernels based on objective.
 
-- Harden hardware detection (CPU/GPU/NPU capabilities).
-- Implement environment discovery and backend registry.
-- Add a minimal benchmark runner with a first backend.
-- Define and persist a results schema.
+```bash
+jido recommend --input runs/new.json --objective latency
+jido recommend --input runs/new.json --objective balanced --top 10
+```
 
-## Contributing
+### `jido report`
+Summarize benchmark JSON with top fastest results and operation-level stats.
 
-Contributions are welcome. If you plan to add a new backend or major capability:
+```bash
+jido report --input runs/new.json
+jido report --input runs/new.json --top 20 --output runs/report.json
+```
 
-- Open an issue describing the scope.
-- Keep modules small and composable.
-- Prefer optional dependencies with graceful fallback.
+### `jido history`
+List stored JSON artifacts in the runs directory.
 
-## Changelog
+```bash
+jido history
+jido history --runs-dir runs --kind benchmark --limit 50
+```
 
-See `CHANGELOG.md` for release notes (currently empty while pre-alpha).
+### `jido export`
+Export results or summary data to CSV/JSON.
 
+```bash
+jido export --input runs/new.json --output runs/new.csv --format csv
+jido export --input runs/new.json --output runs/summary.json --format json --section summary
+```
+
+### `jido list`
+List commands, operations, kernels, or optional extras.
+
+```bash
+jido list
+jido list operations
+jido list kernels --format json
+jido list extras
+```
+
+### `jido config`
+Show defaults, write default config JSON, or print a sample command.
+
+```bash
+jido config
+jido config --write .jido.defaults.json
+jido config --example
+```
+
+### `jido profile`
+Quick benchmark-oriented profile wrapper (defaults to `matmul`).
+
+```bash
+jido profile
+jido profile attention --hardware cuda:0 --iterations 20
+```
+
+### `jido deps`
+Inspect and install optional dependency groups.
+
+```bash
+jido deps
+jido deps --list
+jido deps --extras torch,onnx --install
+```
+
+## Outputs
+
+- `jido scan` writes `hardware.json` and `env.json` under `runs/<machine_id>/`.
+- `jido benchmark` can emit a JSON payload with run metadata and per-kernel metrics:
+  - latency stats (`mean/p95/p99`)
+  - FLOPS / TFLOPS
+  - correctness checks
+  - memory stats
+
+## Notes
+
+- GPU and accelerator detection uses best-effort local tooling (`nvidia-smi`, `rocm-smi`, `sycl-ls`, `lspci`, `lsusb`, etc.).
+- Some benchmark kernels require optional dependencies and/or CUDA availability.

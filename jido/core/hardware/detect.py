@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from jido.core.env.discovery import discover_env
+from jido.core.hardware.accelerators import detect_accelerators
 from jido.core.hardware import amd, intel, nvidia
 
 
@@ -197,8 +198,16 @@ def compute_machine_id(
     memory_total_gb: Optional[int],
     os_arch: str,
     gpus: List[Dict[str, Any]],
+    accelerators: Optional[List[Dict[str, Any]]] = None,
 ) -> str:
     gpu_names = sorted({gpu.get("name", "") for gpu in gpus if gpu.get("name")})
+    accelerator_names = sorted(
+        {
+            device.get("name", "")
+            for device in (accelerators or [])
+            if device.get("name")
+        }
+    )
     payload = "|".join(
         [
             str(cpu.get("brand", "")),
@@ -207,6 +216,7 @@ def compute_machine_id(
             str(memory_total_gb if memory_total_gb is not None else ""),
             os_arch,
             ",".join(gpu_names),
+            ",".join(accelerator_names),
         ]
     )
     digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
@@ -231,6 +241,7 @@ def scan(
         "cpu": cpu,
         "memory": {"total_gb": memory_total_gb},
         "gpus": [],
+        "accelerators": [],
     }
 
     env = discover_env()
@@ -244,15 +255,20 @@ def scan(
         vendor = gpu.get("vendor", "unknown")
         gpu["runtime"] = _runtime_flags_for_gpu(vendor, env)
 
-    _augment_with_torch_gpu_info(gpus)
+    if any(gpu.get("vendor") == "nvidia" for gpu in gpus):
+        _augment_with_torch_gpu_info(gpus)
+
+    accelerators = detect_accelerators(env=env, deep=deep)
 
     hardware["gpus"] = gpus
+    hardware["accelerators"] = accelerators
 
     machine_id = compute_machine_id(
         cpu=cpu,
         memory_total_gb=memory_total_gb,
         os_arch=hardware["os"]["arch"],
         gpus=gpus,
+        accelerators=accelerators,
     )
     hardware["machine_id"] = machine_id
 
@@ -278,6 +294,26 @@ def scan(
         if install_hints or deep:
             hints.append(
                 "Intel GPU detected but sycl-ls not found. Install Intel oneAPI/Level Zero tools."
+            )
+
+    accelerator_types = {device.get("type") for device in accelerators}
+    if "fpga" in accelerator_types and not vendor_tools.get("xbutil", {}).get("available"):
+        if install_hints or deep:
+            hints.append(
+                "FPGA detected but xbutil was not found. Install Xilinx/AMD management tools."
+            )
+    if "tpu" in accelerator_types and not (
+        vendor_tools.get("edgetpu_compiler", {}).get("available")
+        or env.get("frameworks", {}).get("libtpu", {}).get("available")
+    ):
+        if install_hints or deep:
+            hints.append(
+                "TPU-like device detected but Edge TPU/libtpu runtime not found. Install TPU runtime tools."
+            )
+    if "npu" in accelerator_types and not vendor_tools.get("npu_smi", {}).get("available"):
+        if install_hints or deep:
+            hints.append(
+                "NPU-like device detected but npu-smi not found. Install vendor NPU runtime tools."
             )
 
     return hardware, env, hints, machine_id

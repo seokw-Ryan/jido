@@ -9,7 +9,10 @@ such as PyTorch, ONNX Runtime, or vLLM.
 # Show missing optional extras and suggested install command
 jido deps
 
-# Install PyTorch + Transformers extras (editable)
+# Install all optional extras (editable)
+jido deps --install
+
+# Install PyTorch + Transformers extras only
 jido deps --extras torch --install
 
 # List all supported extras
@@ -41,5 +44,5 @@ jido deps --list
 | `--list` | List supported extras and their packages |
 | `--extras torch,onnx` | Target specific extras |
 | `--all` | Target all optional extras |
-| `--install` | Execute `pip install` for the selected extras |
+| `--install` | Execute `pip install` for the selected extras (defaults to all) |
 | `--no-editable` | Install without `-e` (non-editable) |
